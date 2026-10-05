@@ -19,11 +19,30 @@ import {
 
 // Ensure data directory exists
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
-if (!fs.existsSync(DATA_DIR)) {
+if (!fs.existsSync(/*turbopackIgnore: true*/ DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
 const DB_PATH = path.join(DATA_DIR, 'vibecode.db');
+
+// If volume mount is empty, copy existing seed database if available
+if (!fs.existsSync(/*turbopackIgnore: true*/ DB_PATH)) {
+  const seedPaths = [
+    path.join(process.cwd(), 'data_seed', 'vibecode.db'),
+    path.join(process.cwd(), 'data_backup', 'vibecode.db')
+  ];
+  for (const sPath of seedPaths) {
+    if (fs.existsSync(/*turbopackIgnore: true*/ sPath)) {
+      try {
+        fs.copyFileSync(sPath, DB_PATH);
+        console.log(`[Database] Initialized volume DB from seed: ${sPath}`);
+        break;
+      } catch (err) {
+        console.error('[Database] Error copying seed DB:', err);
+      }
+    }
+  }
+}
 
 declare global {
   // eslint-disable-next-line no-var
@@ -32,20 +51,24 @@ declare global {
 
 export function getDb(): Database.Database {
   if (global.__vibecode_db) {
-    initSchema(global.__vibecode_db);
     return global.__vibecode_db;
   }
 
   const db = new Database(DB_PATH);
-  db.pragma('journal_mode = WAL');
+
+  // Use DELETE journal mode on container volumes to avoid shared memory (SHM/WAL) segfaults on bind mounts
+  try {
+    db.pragma('journal_mode = DELETE');
+  } catch (err) {
+    console.warn('[Database] Failed to set journal_mode:', err);
+  }
+
+  db.pragma('busy_timeout = 5000');
   db.pragma('foreign_keys = ON');
 
   initSchema(db);
 
-  if (process.env.NODE_ENV !== 'production') {
-    global.__vibecode_db = db;
-  }
-
+  global.__vibecode_db = db;
   return db;
 }
 

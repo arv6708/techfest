@@ -9,6 +9,9 @@ RUN npm ci
 
 COPY . .
 
+# Preserve seed data before volume mount
+RUN cp -r data data_seed
+
 # Build Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
