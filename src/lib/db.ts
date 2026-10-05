@@ -23,26 +23,8 @@ if (!fs.existsSync(/*turbopackIgnore: true*/ DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-const DB_PATH = path.join(DATA_DIR, 'vibecode.db');
-
-// If volume mount is empty, copy existing seed database if available
-if (!fs.existsSync(/*turbopackIgnore: true*/ DB_PATH)) {
-  const seedPaths = [
-    path.join(process.cwd(), 'data_seed', 'vibecode.db'),
-    path.join(process.cwd(), 'data_backup', 'vibecode.db')
-  ];
-  for (const sPath of seedPaths) {
-    if (fs.existsSync(/*turbopackIgnore: true*/ sPath)) {
-      try {
-        fs.copyFileSync(sPath, DB_PATH);
-        console.log(`[Database] Initialized volume DB from seed: ${sPath}`);
-        break;
-      } catch (err) {
-        console.error('[Database] Error copying seed DB:', err);
-      }
-    }
-  }
-}
+const DB_NAME = process.env.DB_NAME || 'vibecode_v2.db';
+const DB_PATH = path.join(DATA_DIR, DB_NAME);
 
 declare global {
   // eslint-disable-next-line no-var
@@ -349,6 +331,47 @@ function initSchema(db: Database.Database) {
         now,
         now
       );
+    }
+  }
+
+  // Seed participants and users from initial_seed.json if participants table is empty
+  const partCount = (db.prepare('SELECT count(*) as c FROM participants').get() as any)?.c || 0;
+  if (partCount === 0) {
+    const seedJsonPath = path.join(process.cwd(), 'data', 'initial_seed.json');
+    if (fs.existsSync(/*turbopackIgnore: true*/ seedJsonPath)) {
+      try {
+        const rawJson = fs.readFileSync(seedJsonPath, 'utf-8');
+        const seedData = JSON.parse(rawJson);
+        if (Array.isArray(seedData.participants)) {
+          const insertPart = db.prepare(`
+            INSERT INTO participants (
+              id, participant_id, user_id, full_name, email, phone, college, course, 
+              state, district, payment_status, payment_reference, registration_source, 
+              registration_date, status, custom_fields, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const p of seedData.participants) {
+            insertPart.run(
+              p.id, p.participant_id, p.user_id, p.full_name, p.email, p.phone,
+              p.college, p.course, p.state, p.district, p.payment_status,
+              p.payment_reference, p.registration_source, p.registration_date,
+              p.status, p.custom_fields, p.created_at, p.updated_at
+            );
+          }
+        }
+        if (Array.isArray(seedData.users)) {
+          const insertUser = db.prepare(`
+            INSERT OR IGNORE INTO users (id, email, password_hash, role, full_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const u of seedData.users) {
+            insertUser.run(u.id, u.email, u.password_hash, u.role, u.full_name, now, now);
+          }
+        }
+        console.log('[Database] Seeded participants and users from initial_seed.json successfully');
+      } catch (err) {
+        console.error('[Database] Error loading initial_seed.json:', err);
+      }
     }
   }
 }
