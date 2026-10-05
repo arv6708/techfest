@@ -19,9 +19,13 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build
 
+# Standalone mode requires static files and public directory to be copied
+RUN cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+
 # Configure networking and port
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 EXPOSE 3000
 
-CMD ["npm", "start"]
+CMD ["node", ".next/standalone/server.js"]
+

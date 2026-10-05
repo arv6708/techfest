@@ -24,7 +24,7 @@ if (!fs.existsSync(/*turbopackIgnore: true*/ DATA_DIR)) {
 }
 
 const DB_NAME = process.env.DB_NAME || 'vibecode_v2.db';
-const DB_PATH = path.join(DATA_DIR, DB_NAME);
+const DB_PATH = path.join(/*turbopackIgnore: true*/ DATA_DIR, DB_NAME);
 
 declare global {
   // eslint-disable-next-line no-var
@@ -337,14 +337,33 @@ function initSchema(db: Database.Database) {
   // Seed participants and users from initial_seed.json if participants table is empty
   const partCount = (db.prepare('SELECT count(*) as c FROM participants').get() as any)?.c || 0;
   if (partCount === 0) {
-    const seedJsonPath = path.join(process.cwd(), 'data', 'initial_seed.json');
-    if (fs.existsSync(/*turbopackIgnore: true*/ seedJsonPath)) {
+    const seedCandidates = [
+      path.join(process.cwd(), 'data', 'initial_seed.json'),
+      path.join(process.cwd(), 'src', 'data', 'initial_seed.json'),
+      path.join(process.cwd(), 'initial_seed.json')
+    ];
+    const seedJsonPath = seedCandidates.find(p => fs.existsSync(/*turbopackIgnore: true*/ p));
+    if (seedJsonPath) {
       try {
         const rawJson = fs.readFileSync(seedJsonPath, 'utf-8');
         const seedData = JSON.parse(rawJson);
+
+        // Temporarily disable foreign keys during initial seed import to avoid insertion order conflicts
+        db.pragma('foreign_keys = OFF');
+
+        if (Array.isArray(seedData.users)) {
+          const insertUser = db.prepare(`
+            INSERT OR IGNORE INTO users (id, email, password_hash, role, full_name, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+          `);
+          for (const u of seedData.users) {
+            insertUser.run(u.id, u.email, u.password_hash, u.role, u.full_name, now, now);
+          }
+        }
+
         if (Array.isArray(seedData.participants)) {
           const insertPart = db.prepare(`
-            INSERT INTO participants (
+            INSERT OR IGNORE INTO participants (
               id, participant_id, user_id, full_name, email, phone, college, course, 
               state, district, payment_status, payment_reference, registration_source, 
               registration_date, status, custom_fields, created_at, updated_at
@@ -359,17 +378,11 @@ function initSchema(db: Database.Database) {
             );
           }
         }
-        if (Array.isArray(seedData.users)) {
-          const insertUser = db.prepare(`
-            INSERT OR IGNORE INTO users (id, email, password_hash, role, full_name, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-          `);
-          for (const u of seedData.users) {
-            insertUser.run(u.id, u.email, u.password_hash, u.role, u.full_name, now, now);
-          }
-        }
+
+        db.pragma('foreign_keys = ON');
         console.log('[Database] Seeded participants and users from initial_seed.json successfully');
       } catch (err) {
+        db.pragma('foreign_keys = ON');
         console.error('[Database] Error loading initial_seed.json:', err);
       }
     }
