@@ -1,4 +1,4 @@
-FROM node:20-bookworm-slim AS base
+FROM node:22-bookworm-slim AS base
 WORKDIR /app
 
 # Install native compilation dependencies for better-sqlite3
@@ -19,10 +19,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build
 
-# Standalone mode requires static files and public directory to be copied
+# Standalone mode requires static files, public directory, and native modules
 RUN cp -r public .next/standalone/ && cp -r .next/static .next/standalone/.next/
+RUN cp -r node_modules/better-sqlite3 .next/standalone/node_modules/
 
-# Configure networking and port
+# Configure database persistence, networking and port
+ENV DATA_DIR="/app/data"
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 EXPOSE 3000

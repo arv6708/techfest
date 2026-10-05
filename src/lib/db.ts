@@ -36,6 +36,10 @@ export function getDb(): Database.Database {
     return global.__vibecode_db;
   }
 
+  if (!fs.existsSync(/*turbopackIgnore: true*/ DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
   const db = new Database(DB_PATH);
 
   // Use DELETE journal mode on container volumes to avoid shared memory (SHM/WAL) segfaults on bind mounts
