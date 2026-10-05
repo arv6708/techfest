@@ -4,14 +4,15 @@ WORKDIR /app
 # Install native compilation dependencies for better-sqlite3
 RUN apt-get update && apt-get install -y python3 make g++ && rm -rf /var/lib/apt/lists/*
 
-COPY package*.json ./
-RUN npm ci
-RUN npm rebuild better-sqlite3 --build-from-source
-
+# Copy all source files
 COPY . .
 
-# Preserve seed data before volume mount
-RUN cp -r data data_seed
+# Ensure no host/Windows build artifacts exist
+RUN rm -rf node_modules .next data/*.db-shm data/*.db-wal
+
+# Clean install and rebuild native dependencies for Linux x64
+RUN npm ci
+RUN npm rebuild better-sqlite3 --build-from-source
 
 # Build Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
