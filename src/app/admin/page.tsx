@@ -109,7 +109,10 @@ export default function AdminDashboardPage() {
       });
 
       const res = await fetch(`/api/participants?${params.toString()}`);
-      if (!res.ok) throw new Error('Failed to load participants');
+      if (!res.ok) {
+        if (res.status === 401 || res.status === 403) return;
+        throw new Error('Failed to load participants');
+      }
       const data = await res.json();
 
       setParticipants(data.participants || []);

@@ -27,26 +27,34 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [eventConfig, setEventConfig] = useState<any>(null);
 
   useEffect(() => {
+    let isMounted = true;
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
-        if (!data.authenticated || data.user.role !== 'ADMIN') {
-          router.push('/login');
+        if (!isMounted) return;
+        if (!data.authenticated || data.user?.role !== 'ADMIN') {
+          router.replace('/login?tab=admin');
           return;
         }
         setAdminUser(data.user);
+        setLoading(false);
       })
       .catch(() => {
-        router.push('/login');
-      })
-      .finally(() => setLoading(false));
+        if (isMounted) {
+          router.replace('/login?tab=admin');
+        }
+      });
 
     fetch('/api/event/status')
       .then(res => res.json())
       .then(data => {
-        setEventConfig(data);
+        if (isMounted) setEventConfig(data);
       })
       .catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
   }, [router, pathname]);
 
   if (loading) {

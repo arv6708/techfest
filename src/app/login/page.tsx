@@ -27,6 +27,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Auto-switch to Admin tab if URL specifies tab=admin or role=admin
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get('tab') || params.get('role');
+      if (tab && tab.toLowerCase() === 'admin') {
+        setActiveTab('ADMIN');
+      }
+    }
+  }, []);
+
   const [eventStatus, setEventStatus] = useState<any>(null);
   const [timeRemaining, setTimeRemaining] = useState<{
     days: number;
